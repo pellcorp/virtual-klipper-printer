@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import json
 import os
 import tempfile
@@ -7,7 +9,11 @@ from typing import Any, cast
 from .axis import Axis
 from .pin_handler import PinHandler
 
-STATE_FILE_PATH = "/home/developer/printer_data/printer_state.json"
+# The Docker image keeps its original state-file location. Device deployments
+# can override it so their state stays inside the installed bundle.
+STATE_FILE_PATH = os.environ.get(
+    "VIRTUAL_PRINTER_STATE_FILE", "/home/developer/printer_data/printer_state.json"
+)
 
 
 def _axis_key(axis_name: str) -> str:

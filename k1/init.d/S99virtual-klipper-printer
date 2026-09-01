@@ -1,0 +1,43 @@
+#!/bin/sh
+# BusyBox init service for the isolated virtual Klipper Linux MCU.
+
+ROOT=/usr/data/virtual-klipper-printer
+RUNDIR=/tmp/virtual-klipper-printer
+MCU_SOCKET=/tmp/virtual_afc_mcu
+HOOK_SOCKET=/tmp/virtual_printer_hook.sock
+PYTHON=${PYTHON:-python3}
+SIM_PID=$RUNDIR/simulator.pid
+MCU_PID=$RUNDIR/mcu.pid
+
+running() { test -r "$1" && kill -0 "$(cat "$1")" 2>/dev/null; }
+
+start() {
+    if running "$SIM_PID" && running "$MCU_PID"; then return 0; fi
+    mkdir -p "$RUNDIR" "$ROOT/logs"
+    rm -f "$MCU_SOCKET" "$HOOK_SOCKET"
+    FAKE_HARDWARE_SOCKET="$HOOK_SOCKET" VIRTUAL_PRINTER_STATE_FILE="$ROOT/printer_state.json" \
+        "$PYTHON" "$ROOT/printer_simulator.py" >>"$ROOT/logs/printer_simulator.log" 2>&1 &
+    echo $! >"$SIM_PID"
+    attempt=0
+    while test ! -S "$HOOK_SOCKET" && test "$attempt" -lt 5; do sleep 1; attempt=$((attempt + 1)); done
+    if test ! -S "$HOOK_SOCKET"; then
+        echo "virtual-klipper-printer: simulator did not create $HOOK_SOCKET" >&2; stop; return 1
+    fi
+    LD_PRELOAD="$ROOT/lib/hardware_bridge_hook.so" FAKE_HARDWARE_SOCKET="$HOOK_SOCKET" \
+    FAKE_HARDWARE_FAST_MODE=1 \
+    FAKE_HARDWARE_LOADED_LANES=1,2,3,4 \
+        "$ROOT/bin/klipper_host_mcu" -I "$MCU_SOCKET" >>"$ROOT/logs/klipper_host_mcu.log" 2>&1 &
+    echo $! >"$MCU_PID"
+}
+
+stop_one() { if running "$1"; then kill "$(cat "$1")"; fi; rm -f "$1"; }
+stop() { stop_one "$MCU_PID"; stop_one "$SIM_PID"; rm -f "$MCU_SOCKET" "$HOOK_SOCKET"; }
+status() {
+    if running "$SIM_PID" && running "$MCU_PID"; then echo "virtual-klipper-printer is running"; return 0; fi
+    echo "virtual-klipper-printer is stopped"; return 1
+}
+
+case "$1" in
+    start) start ;; stop) stop ;; restart) stop; start ;; status) status ;;
+    *) echo "Usage: $0 {start|stop|restart|status}" >&2; exit 2 ;;
+esac

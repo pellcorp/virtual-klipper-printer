@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import os
 import socket
 import threading
@@ -11,7 +13,7 @@ class FakeHardwareServer:
     def __init__(
         self,
         hardware_components: list[PinHandler],
-        socket_path: str = "/tmp/printer_hook.sock",
+        socket_path: str | None = None,
         state_file_path: str = STATE_FILE_PATH,
         min_state_write_interval: float = 0.2,
     ):
@@ -31,7 +33,9 @@ class FakeHardwareServer:
                         f"Pin {pin} is already assigned to another component for writing!"
                     )
                 self.write_mapping[pin] = component
-        self.socket_path = socket_path
+        self.socket_path = socket_path or os.environ.get(
+            "FAKE_HARDWARE_SOCKET", "/tmp/printer_hook.sock"
+        )
         self.lock = threading.Lock()
         self.state_file_path = state_file_path
         self.min_state_write_interval = min_state_write_interval

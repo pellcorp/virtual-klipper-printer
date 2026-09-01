@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from printer_hardware.axis import Axis
 from printer_hardware.heatbed import Heatbed
 from printer_hardware.input_pin import InputPin

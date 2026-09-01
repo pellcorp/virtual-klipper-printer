@@ -46,6 +46,52 @@ static void init_real_funcs(void) {
     if (!real_pread)  real_pread  = dlsym(RTLD_NEXT, "pread");
 }
 
+/* Per-step diagnostics make a Linux-host MCU unusably slow on the K1.
+ * Set FAKE_HARDWARE_DEBUG=1 when investigating bridge behaviour. */
+static void debug_log(const char *format, ...) {
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *value = getenv("FAKE_HARDWARE_DEBUG");
+        enabled = value && value[0] && strcmp(value, "0") != 0;
+    }
+    if (!enabled) return;
+
+    va_list args;
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+}
+
+/* K1 AFC simulation has fixed sensor values and does not need rendered output.
+ * Avoiding a Unix-socket round trip (and Python thread) for every GPIO edge is
+ * essential on its MIPS Linux-host MCU. */
+static int fast_mode_enabled(void) {
+    static int enabled = -1;
+    if (enabled < 0) {
+        const char *value = getenv("FAKE_HARDWARE_FAST_MODE");
+        enabled = value && value[0] && strcmp(value, "0") != 0;
+    }
+    return enabled;
+}
+
+/* In fast mode, emulate the AFC prep switches without involving Python.
+ * FAKE_HARDWARE_LOADED_LANES accepts a comma-separated lane list, e.g. 1,3.
+ * For each selected lane both prep and load switches are active; the hub
+ * switch remains inactive. */
+static int fast_input_value(const char *key, int fallback) {
+    const char *loaded_lanes = getenv("FAKE_HARDWARE_LOADED_LANES");
+    int lane = 0;
+
+    if (!loaded_lanes) return fallback;
+    if (strcmp(key, "chip7_gpio3") == 0 || strcmp(key, "chip7_gpio4") == 0) lane = 1;
+    else if (strcmp(key, "chip7_gpio9") == 0 || strcmp(key, "chip7_gpio10") == 0) lane = 2;
+    else if (strcmp(key, "chip7_gpio14") == 0 || strcmp(key, "chip7_gpio15") == 0) lane = 3;
+    else if (strcmp(key, "chip7_gpio19") == 0 || strcmp(key, "chip7_gpio20") == 0) lane = 4;
+    else return fallback;
+
+    return strchr(loaded_lanes, '0' + lane) ? 1 : 0;
+}
+
 
 // ─────────────────────────────────────────────────────────
 // FD Tracking
@@ -133,6 +179,8 @@ static int socket_request(const char *request, char *response, size_t resp_size)
 
 static int read_value(const char *key, int fallback) {
     // Send a request to the Python socket server to read a value (ADC or GPIO) and return it as an integer.
+    if (fast_mode_enabled()) return fast_input_value(key, fallback);
+
     char request[64], response[32];
     snprintf(request, sizeof(request), "GET %s\n", key);
 
@@ -144,6 +192,8 @@ static int read_value(const char *key, int fallback) {
 
 static void write_value(const char *key, int value) {
     // Send a request to the Python socket server to write a value (for GPIO).
+    if (fast_mode_enabled()) return;
+
     char request[64], response[32];
     snprintf(request, sizeof(request), "SET %s %d\n", key, value);
     socket_request(request, response, sizeof(response));
@@ -176,7 +226,7 @@ int open(const char *path, int flags, ...) {
         FakeFd *f = alloc_fake_fd(fd, FD_ADC);
         if (!f) { real_close(fd); errno = ENOMEM; return -1; }
         f->channel = channel;
-        fprintf(stderr, "[fake_hw] open ADC channel %d -> fd %d\n", channel, fd);
+        debug_log("[fake_hw] open ADC channel %d -> fd %d\n", channel, fd);
         return fd;
     }
 
@@ -189,7 +239,7 @@ int open(const char *path, int flags, ...) {
         FakeFd *f = alloc_fake_fd(fd, FD_GPIO_CHIP);
         if (!f) { real_close(fd); errno = ENOMEM; return -1; }
         f->chip = chip;
-        fprintf(stderr, "[fake_hw] open gpiochip%d -> fd %d\n", chip, fd);
+        debug_log("[fake_hw] open gpiochip%d -> fd %d\n", chip, fd);
         return fd;
     }
 
@@ -214,7 +264,7 @@ int open64(const char *path, int flags, ...) {
 int access(const char *path, int mode) {
     init_real_funcs();
     if (strstr(path, "/dev/gpiochip")) {
-        fprintf(stderr, "[fake_hw] access(%s) -> OK\n", path);
+        debug_log("[fake_hw] access(%s) -> OK\n", path);
         return 0;
     }
     return real_access(path, mode);
@@ -237,7 +287,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset) {
         if (offset >= len) return 0;
         size_t n = (size_t)(len - offset) < count ? (size_t)(len - offset) : count;
         memcpy(buf, tmp + offset, n);
-        fprintf(stderr, "[fake_hw] pread ADC channel %d = %d\n", f->channel, value);
+        debug_log("[fake_hw] pread ADC channel %d = %d\n", f->channel, value);
         return (ssize_t)n;
     }
     return real_pread(fd, buf, count, offset);
@@ -264,7 +314,7 @@ int ioctl(int fd, unsigned long request, ...) {
         snprintf(info->name,  sizeof(info->name),  "gpiochip%d", f->chip);
         snprintf(info->label, sizeof(info->label), "fake-gpio%d", f->chip);
         info->lines = 64;
-        fprintf(stderr, "[fake_hw] ioctl CHIPINFO chip%d\n", f->chip);
+        debug_log("[fake_hw] ioctl CHIPINFO chip%d\n", f->chip);
         return 0;
     }
 
@@ -289,7 +339,7 @@ int ioctl(int fd, unsigned long request, ...) {
         for (int i = 0; i < (int)req->lines && i < GPIOHANDLES_MAX; i++)
             lf->line_offsets[i] = req->lineoffsets[i];
         req->fd = line_fd;
-        fprintf(stderr, "[fake_hw] ioctl GET_LINEHANDLE lines=%d -> fd %d\n",
+        debug_log("[fake_hw] ioctl GET_LINEHANDLE lines=%d -> fd %d\n",
                 req->lines, line_fd);
         return 0;
     }
@@ -302,7 +352,7 @@ int ioctl(int fd, unsigned long request, ...) {
             char key[32];
             snprintf(key, sizeof(key), "chip%d_gpio%d", f->chip, f->line_offsets[i]);
             data->values[i] = read_value(key, 0) ? 1 : 0;
-            fprintf(stderr, "[fake_hw] ioctl GET %s = %d\n", key, data->values[i]);
+            debug_log("[fake_hw] ioctl GET %s = %d\n", key, data->values[i]);
         }
         return 0;
     }
@@ -313,7 +363,7 @@ int ioctl(int fd, unsigned long request, ...) {
         for (int i = 0; i < f->num_lines && i < GPIOHANDLES_MAX; i++) {
             char key[32];
             snprintf(key, sizeof(key), "chip%d_gpio%d", f->chip, f->line_offsets[i]);
-            fprintf(stderr, "[fake_hw] ioctl SET %s = %d\n", key, data->values[i]);
+            debug_log("[fake_hw] ioctl SET %s = %d\n", key, data->values[i]);
             write_value(key, data->values[i]);
         }
         return 0;
