@@ -7,10 +7,10 @@ sensors.
 
 ```
 docker build . --tag virtual-klipper-env
-docker run --rm -it -p 8080:80 -p 127.0.0.1:7125:7125 virtual-klipper-env
+docker run --rm -it -p 4408:80 -p 127.0.0.1:7125:7125 virtual-klipper-env
 ```
 
-You can access fluidd via http://localhost:8080
+You can access fluidd via http://localhost:4408
 
 ### AFC lane state
 
@@ -20,10 +20,6 @@ program, without bypassing the normal simulator. To simulate only particular
 loaded lanes, override that value in `supervisord.conf` (for example, `"1,3"`),
 rebuild the image, and run `AFC_PREP` after Klipper restarts so AFC refreshes
 its lane state.
-
-Some may ask why not just use the virtual-klipper-printer directly, to be honest I found it overly complicated to
-set up, and it is not very well documented.  I need a basic printer setup to do basic testing for GrumpyScreen so this
-works for me.
 
 ## Creality K1 / Kalico bundle
 
