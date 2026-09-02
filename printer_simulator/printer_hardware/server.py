@@ -62,7 +62,7 @@ class FakeHardwareServer:
             if key in self.write_mapping:
                 self.write_mapping[key].set(key, value)
                 self._dump_state()
-            else:
+            elif not (key.startswith("chip") and "_gpio" in key):
                 print(f"[server] set unknown key: {key}={value}")
 
     def get(self, key: str) -> int:
@@ -71,7 +71,8 @@ class FakeHardwareServer:
                 value = self.read_mapping[key].get(key)
                 self._dump_state()
                 return value
-            print(f"[server] get unknown key: {key}")
+            if not (key.startswith("chip") and "_gpio" in key):
+                print(f"[server] get unknown key: {key}")
             return 0
 
     def _handle_client(self, conn):
