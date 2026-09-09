@@ -26,7 +26,7 @@ RUN useradd -m -s /bin/bash developer \
     && echo 'developer ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/developer \
     && chmod 0440 /etc/sudoers.d/developer
 
-RUN git clone --depth=1 https://github.com/pellcorp/klipper-rpi.git ${KLIPPER_DIR}
+RUN git clone --depth=1 https://github.com/pellcorp/kalico-rpi.git ${KLIPPER_DIR}
 
 RUN git clone --depth=1 https://github.com/Arksine/moonraker.git ${MOONRAKER_DIR}
 
