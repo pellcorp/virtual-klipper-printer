@@ -21,6 +21,17 @@ loaded lanes, override that value in `supervisord.conf` (for example, `"1,3"`),
 rebuild the image, and run `AFC_PREP` after Klipper restarts so AFC refreshes
 its lane state.
 
+The shared hub sensor reports empty by default so AFC prep and slot discovery
+can start from a clear filament path. To debug a load command that stops with
+"filament did not trigger hub sensor", temporarily set
+`FAKE_HARDWARE_HUB_SENSOR=1` after AFC has discovered its lanes. Do not leave it
+enabled while running `AFC_PREP`, or AFC may treat the path as already occupied.
+
+For the Docker UI simulator, the bundled AFC lanes are configured as
+`hub: direct` with AFC homing disabled. This means the hub sensor is not required
+for normal UI testing: start the container, open Fluidd, home the printer, run
+`PREP`, then load a slot with `T0`-`T3` or `TOOL_LOAD LANE=lane1`.
+
 ## Creality K1 / Kalico bundle
 
 ```sh

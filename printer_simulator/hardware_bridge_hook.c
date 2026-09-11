@@ -58,16 +58,28 @@ static int fast_mode_enabled(void) {
     return enabled;
 }
 
+static int env_truthy(const char *value) {
+    return value && value[0] && strcmp(value, "0") != 0 && strcmp(value, "false") != 0 && strcmp(value, "False") != 0;
+}
+
 /* Emulate configured AFC prep switches without involving Python.
  * FAKE_HARDWARE_LOADED_LANES accepts a comma-separated lane list, e.g. 1,3.
- * For each selected lane both prep and load switches are active; the hub
- * switch remains inactive.  This also works outside fast mode so the regular
- * simulated printer endstops and motion renderer remain active. */
+ * For each selected lane both prep and load switches are active. The shared
+ * hub switch stays inactive unless forced with FAKE_HARDWARE_HUB_SENSOR=1.
+ * This also works outside fast mode so the regular simulated printer endstops
+ * and motion renderer remain active. */
 static int configured_lane_input_value(const char *key, int *handled) {
     const char *loaded_lanes = getenv("FAKE_HARDWARE_LOADED_LANES");
+    const char *hub_sensor = getenv("FAKE_HARDWARE_HUB_SENSOR");
     int lane = 0;
 
     *handled = 0;
+    if (strcmp(key, "chip7_gpio5") == 0) {
+        *handled = 1;
+        if (hub_sensor && hub_sensor[0]) return env_truthy(hub_sensor) ? 1 : 0;
+        return 0;
+    }
+
     if (!loaded_lanes) return 0;
     if (strcmp(key, "chip7_gpio3") == 0 || strcmp(key, "chip7_gpio4") == 0) lane = 1;
     else if (strcmp(key, "chip7_gpio9") == 0 || strcmp(key, "chip7_gpio10") == 0) lane = 2;

@@ -11,6 +11,7 @@ ENV SIMULAVR_DIR=/home/developer/simulavr
 ENV AFC_DIR=/home/developer/AFC-Klipper-Add-On
 
 # Pin the plugin revision so the simulator's AFC object schema is stable.
+# If this is changed, update patches/apply_afc_fallback.py and rerun the AFC smoke test.
 ARG AFC_REVISION=5ea84ea6fab75b9b49db090f309154d1e52272bb
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -50,6 +51,10 @@ RUN python3 -m venv ${KLIPPY_ENV} \
 
 RUN git clone https://github.com/AFCProject/AFC-Klipper-Add-On.git ${AFC_DIR} \
     && git -C ${AFC_DIR} checkout --detach ${AFC_REVISION} \
+    && test "$(git -C ${AFC_DIR} rev-parse HEAD)" = "${AFC_REVISION}"
+
+COPY --chown=developer:developer patches /home/developer/patches
+RUN python3 /home/developer/patches/apply_afc_fallback.py ${AFC_DIR} \
     && for extension in ${AFC_DIR}/extras/*.py; do \
          extension_name=${extension##*/}; \
          [ "${extension_name}" = "__init__.py" ] || \
@@ -63,7 +68,7 @@ RUN ${KLIPPY_ENV}/bin/pip install --no-cache-dir -r /home/developer/printer_simu
 COPY --chown=developer:developer printer_simulator /home/developer/printer_simulator
 
 WORKDIR /home/developer/printer_simulator
-RUN make
+RUN make clean && make
 
 COPY --chown=developer:developer linux.config ${KLIPPER_DIR}/.config
 

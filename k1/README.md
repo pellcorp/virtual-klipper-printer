@@ -59,3 +59,14 @@ all four AFC prep and load sensors report filament present. Edit that setting
 to, for example, `1,3` and restart the service to simulate only lanes 1 and 3
 loaded. Run `AFC_PREP` in Kalico after changing the setting so AFC refreshes
 its state.
+
+The shared AFC hub sensor reports empty by default so AFC prep and slot
+discovery can start from a clear filament path. To debug a load command that
+stops with "filament did not trigger hub sensor", temporarily set
+`FAKE_HARDWARE_HUB_SENSOR=1` after AFC has discovered its lanes. Do not leave it
+enabled while running `AFC_PREP`, or AFC may treat the path as already occupied.
+
+The virtual K1 lane definitions use `hub: direct`, so they do not depend on the
+simulated hub switch for normal slot visibility. Tool-load behavior still
+depends on the main AFC configuration installed on the printer, including global
+homing and toolhead sensor settings.

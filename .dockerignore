@@ -1,0 +1,6 @@
+printer_simulator/hardware_bridge_hook.so
+printer_simulator/.venv/
+build/
+dist/
+.git/
+.idea/
