@@ -7,10 +7,11 @@ sensors.
 
 ```
 docker build . --tag virtual-klipper-env
-docker run --rm -it -p 4408:80 -p 127.0.0.1:7125:7125 virtual-klipper-env
+docker run --rm -it -p 4408:80 -p 4409:81 -p 127.0.0.1:7125:7125 virtual-klipper-env
 ```
 
 You can access fluidd via http://localhost:4408
+You can access mainsail via http://localhost:4409
 
 ### AFC lane state
 

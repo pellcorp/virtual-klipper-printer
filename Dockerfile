@@ -7,6 +7,7 @@ ENV MOONRAKER_DIR=/home/developer/moonraker
 ENV PRINTER_DATA=/home/developer/printer_data
 ENV KLIPPY_ENV=/home/developer/klippy-env
 ENV FLUIDD_DIR=/home/developer/fluidd
+ENV MAINSAIL_DIR=/home/developer/mainsail
 ENV SIMULAVR_DIR=/home/developer/simulavr
 ENV AFC_DIR=/home/developer/AFC-Klipper-Add-On
 
@@ -35,6 +36,11 @@ RUN mkdir -p ${FLUIDD_DIR} \
     && wget -O /tmp/fluidd.zip https://github.com/fluidd-core/fluidd/releases/latest/download/fluidd.zip \
     && unzip /tmp/fluidd.zip -d ${FLUIDD_DIR} \
     && rm /tmp/fluidd.zip
+
+RUN mkdir -p ${MAINSAIL_DIR} \
+    && wget -O /tmp/mainsail.zip https://github.com/mainsail-crew/mainsail/releases/latest/download/mainsail.zip \
+    && unzip /tmp/mainsail.zip -d ${MAINSAIL_DIR} \
+    && rm /tmp/mainsail.zip
 
 RUN chown -R developer:developer ${HOME}
 
@@ -102,6 +108,6 @@ RUN printf '\n[include afc.cfg]\n' >> ${PRINTER_DATA}/config/printer.cfg
 
 WORKDIR ${HOME}
 
-EXPOSE 80 7125
+EXPOSE 80 81 7125
 
 CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/klipper-dev.conf"]
