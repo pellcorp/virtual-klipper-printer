@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from printer_hardware.axis import Axis
+from printer_hardware.chamber_fan import ChamberFan
 from printer_hardware.heatbed import Heatbed
 from printer_hardware.input_pin import InputPin
 from printer_hardware.output_pin import OutputPin
@@ -70,17 +71,21 @@ probe = Probe(
         bump_radius=80.0,
     ),
 )
+chamber_fan = ChamberFan(
+    name="chamber_fan",
+    fan_pin="chip6_gpio2",
+    sensor_pin="analog2",
+)
 io_pins: list[PinHandler] = [
     InputPin(name="filament_sensor", pin="chip6_gpio3", initial_value=1),
     OutputPin(name="fan", pin="chip6_gpio0"),
     OutputPin(name="heater_fan", pin="chip6_gpio1"),
-    OutputPin(name="controller_fan", pin="chip6_gpio2"),
     OutputPin(name="output_pin", pin="chip6_gpio4"),
 ]
 
 if __name__ == "__main__":
     fake_server = FakeHardwareServer(
-        hardware_components=axis + [heatbed, extruder, probe] + io_pins,
+        hardware_components=axis + [heatbed, extruder, probe, chamber_fan] + io_pins,
         state_file_path=STATE_FILE_PATH,
     )
     fake_server.run()
