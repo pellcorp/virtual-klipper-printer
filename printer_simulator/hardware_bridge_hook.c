@@ -143,36 +143,50 @@ static int make_dummy_fd(void) {
 // Socket Communication
 // ─────────────────────────────────────────────────────────
 
-static int socket_request(const char *request, char *response, size_t resp_size) {
-    /*
-    establishes a connection to the Python socket server and sends a request, then waits for a response.
-    */
+// Persistent connection to the Python server: one socket for all requests instead of one
+// connection (and one Python thread) per GPIO toggle, which was too slow for step pulses.
+static int hw_sock = -1;
+
+static int hw_connect(void) {
+    if (hw_sock >= 0) return hw_sock;
     const char *socket_path = getenv(SOCKET_PATH_ENV);
     if (!socket_path) return -1;
-
     int sock = socket(AF_UNIX, SOCK_STREAM, 0);
     if (sock < 0) return -1;
-
     struct sockaddr_un addr = {0};
     addr.sun_family = AF_UNIX;
     strncpy(addr.sun_path, socket_path, sizeof(addr.sun_path) - 1);
-
     if (connect(sock, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
         close(sock);
         return -1;
     }
-
-    // Set timeout to prevent Klipper from blocking if Python doesn't respond
     struct timeval tv = { .tv_sec = 0, .tv_usec = SOCKET_TIMEOUT_MS * 1000 };
     setsockopt(sock, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
+    hw_sock = sock;
+    return hw_sock;
+}
 
-    send(sock, request, strlen(request), 0);
+static int hw_send(const char *msg) {
+    for (int attempt = 0; attempt < 2; attempt++) {
+        int sock = hw_connect();
+        if (sock < 0) return -1;
+        if (send(sock, msg, strlen(msg), MSG_NOSIGNAL) == (ssize_t)strlen(msg)) return sock;
+        close(sock);
+        hw_sock = -1;
+    }
+    return -1;
+}
 
-    ssize_t n = recv(sock, response, resp_size - 1, 0);
-    if (n > 0) response[n] = '\0';
-    else response[0] = '\0';
-
-    close(sock);
+static int hw_readline(int sock, char *response, size_t resp_size) {
+    size_t n = 0;
+    while (n < resp_size - 1) {
+        char c;
+        ssize_t r = recv(sock, &c, 1, 0);
+        if (r <= 0) { close(sock); hw_sock = -1; break; }
+        if (c == '\n') break;
+        response[n++] = c;
+    }
+    response[n] = '\0';
     return n > 0 ? 0 : -1;
 }
 
@@ -186,7 +200,8 @@ static int read_value(const char *key, int fallback) {
     char request[64], response[32];
     snprintf(request, sizeof(request), "GET %s\n", key);
 
-    if (socket_request(request, response, sizeof(response)) < 0)
+    int sock = hw_send(request);
+    if (sock < 0 || hw_readline(sock, response, sizeof(response)) < 0)
         return fallback;
 
     return atoi(response);
@@ -197,8 +212,10 @@ static void write_value(const char *key, int value) {
     if (fast_mode_enabled()) return;
 
     char request[64], response[32];
-    snprintf(request, sizeof(request), "SET %s %d\n", key, value);
-    socket_request(request, response, sizeof(response));
+    (void)response;
+    // fire-and-forget: the server does not answer SETQ, the MCU does not wait
+    snprintf(request, sizeof(request), "SETQ %s %d\n", key, value);
+    hw_send(request);
 }
 
 
