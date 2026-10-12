@@ -101,6 +101,8 @@ COPY --chown=developer:developer moonraker.conf ${PRINTER_DATA}/config/moonraker
 COPY --chown=developer:developer moonraker.asvc ${PRINTER_DATA}/
 COPY --chown=root:root nginx.conf /etc/nginx/nginx.conf
 COPY --chown=root:root supervisord.conf /etc/supervisor/conf.d/klipper-dev.conf
+COPY --chown=root:root scripts/start_mcu.sh /usr/local/bin/start_mcu
+RUN chmod 0755 /usr/local/bin/start_mcu
 
 RUN chown -R developer:developer ${HOME}
 
